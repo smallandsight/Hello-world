@@ -1,0 +1,181 @@
+# 🏍️ 古月租车后端服务 (gy-bike-server)
+
+> NestJS 10 + TypeScript + TypeORM + MySQL + Redis
+
+## 📋 项目简介
+
+古月租车小程序的后端 API 服务，基于 **模块化单体架构** + **DDD 分层** 设计。本仓库为第一阶段（W1-4）基础架构代码，包含完整的项目骨架、公共基础设施、20 张表的 TypeORM Entity 和 10 个业务模块的骨架。
+
+## 🚀 快速开始
+
+### 环境要求
+
+- **Node.js** >= 18.0
+- **MySQL** 8.0+（纯代码阶段可不启动）
+- **Redis** 7.x（纯代码阶段可不启动）
+
+### 安装依赖
+
+```bash
+cd Basic/server
+npm install
+```
+
+### 配置环境变量
+
+```bash
+cp .env.example .env
+# 编辑 .env，填入实际配置值（数据库/Redis/JWT密钥等）
+```
+
+### 启动开发服务器
+
+```bash
+# 开发模式（热重载）
+npm run start:dev
+
+# 普通启动
+npm run start
+
+# 构建生产版本
+npm run build && npm run start:prod
+```
+
+启动成功后访问：
+- **API**: `http://localhost:3000/v1`
+- **Swagger 文档**: `http://localhost:3000/docs`（仅非 production 环境）
+- **健康检查**: `http://localhost:3000/health`
+
+## 📁 目录结构
+
+```
+server/src/
+├── main.ts                    # 应用入口
+├── app.module.ts              # 根模块（总装）
+│
+├── common/                    # 公共基础设施（Global）
+│   ├── base.entity.ts         # TypeORM 实体基类（审计字段+软删除）
+│   ├── redis/                 # Redis 服务封装（缓存/锁/限流）
+│   ├── decorators/            # @CurrentUser / @Permissions / @Public
+│   ├── filters/               # HttpExceptionFilter / QueryExceptionFilter
+│   ├── interceptors/          # ResponseInterceptor / LoggingInterceptor
+│   ├── guards/                # JwtAuthGuard / StaffAuthGuard / RolesGuard
+│   ├── middleware/             # LoggerMiddleware
+│   ├── dto/                   # ApiResponse / PageQueryDto / ErrorCode
+│   └── constants/             # 错误码常量表 / HTTP状态码映射
+│
+├── config/                    # 配置管理
+│   ├── config.module.ts       # ConfigModule 导出
+│   ├── database.config.ts     # TypeORM MySQL 配置
+│   ├── redis.config.ts        # ioredis Redis 配置
+│   └── app.config.ts          # 应用级常量（JWT/CORS/端口等）
+│
+├── shared/                    # 前后端共享类型
+│   └── types/                 # IPayload / OrderStatusEnum / VehicleStatusEnum ...
+│
+├── modules/                   # 业务 FeatureModule
+│   ├── auth/                  # 认证（登录/JWT签发/刷新/登出）
+│   ├── user/                  # 用户（信息/会员/驾驶证）→ 3 Entity
+│   ├── vehicle/               # 车辆（门店/车型/车辆/图片/维护）→ 5 Entity
+│   ├── order/                 # 订单（下单/取车/还车/结算/状态机）→ 2 Entity
+│   ├── payment/               # 支付（支付/预授权/退款）→ 3 Entity
+│   ├── coupon/                # 营销（优惠券/用户券/积分）→ 3 Entity
+│   ├── ticket/                # 客服工单（工单/回复）→ 2 Entity
+│   ├── staff/                 # 权限管理（角色/权限/员工/RBAC中间表）→ 5 Entity
+│   └── message/               # 消息推送 → 1 Entity
+│
+└── database/                  # 数据库相关（占位）
+    └── migrations/            # TypeORM 迁移文件
+```
+
+## 🏗️ 架构设计要点
+
+### 技术栈
+| 层面 | 技术 | 版本 |
+|------|------|------|
+| 框架 | NestJS | ^10.0 |
+| 语言 | TypeScript (strict) | ^5.x |
+| ORM | TypeORM | ^0.3.x |
+| 数据库 | MySQL | 8.0+ |
+| 缓存 | Redis (ioredis) | 7.x |
+| 认证 | Passport + JWT | - |
+| 校验 | class-validator | ^0.14 |
+| 文档 | Swagger/OpenAPI | ^7.x |
+
+### 关键决策
+
+1. **Entity 继承 BaseEntity**：统一 `id/createdAt/updatedAt/deletedAt/createdBy/updatedBy` 七个审计字段
+2. **统一响应格式**：全局 `ResponseInterceptor` 自动包装为 `{code, message, data, timestamp}`
+3. **错误码体系**：8 段式枚举（0=成功, 1xxx=通用, ..., 9xxx=系统），Filter 按 code 匹配 HTTP 状态码
+4. **JWT 双 Token**：用户端 7 天 / 商家端 2 天，含黑名单机制（Redis）
+5. **RBAC 权限**：`@Roles()` + `@Permissions()` 装饰器 + `RolesGuard` 守卫
+6. **金额存储**：统一使用分为单位（BIGINT），Service 层做分↔元转换
+7. **时间精度**：DATETIME(3) 毫秒级
+8. **字符集**：utf8mb4 / utf8mb4_unicode_ci
+
+### 数据库 20 张表
+
+| 模块 | 表名 | 数量 | 说明 |
+|------|------|------|------|
+| 用户 | users, driver_licenses, user_levels | 3 | 用户聚合根 |
+| 车辆 | stores, vehicle_models, vehicles, vehicle_images, vehicle_maintenance | 5 | 车辆聚合根 |
+| 订单 | orders, order_logs | 2 | 含状态机枚举(10-80) |
+| 支付 | payments, preauths, refunds | 3 | 多渠道支付+预授权 |
+| 营销 | coupons, user_coupons, points_records | 3 | 优惠券+积分 |
+| 客服 | tickets, ticket_replies | 2 | 工单SLA指标 |
+| 权限 | roles, permissions, staff, role_permissions, staff_roles | 5 | RBAC模型 |
+| 消息 | message_log | 1 | 推送日志 |
+
+## 📡 API 规范
+
+- **基础路径**: `/v1`
+- **响应格式**:
+```json
+{
+  "code": 0,
+  "message": "操作成功",
+  "data": { ... },
+  "timestamp": "2026-04-05T21:00:00.000Z"
+}
+```
+- **分页参数**: `page`(从1开始), `size`, `sort`(如 `-createdAt`)
+- **认证方式**: `Authorization: Bearer <jwt_token>`
+
+## 🔒 安全措施
+
+- Helmet 中间件（安全头设置）
+- CORS 白名单控制
+- JWT Token 黑名单（Redis）
+- RBAC 权限控制（角色+数据范围）
+- 参数校验（class-validator）
+- 敏感信息加密存储（身份证等）
+- SQL 注入防护（TypeORM 参数化查询）
+
+## ⚠️ 当前阶段说明
+
+**第一阶段（W1-4）已完成：**
+- ✅ 项目初始化与脚手架
+- ✅ 公共基础设施（过滤器/拦截器/守卫/装饰器/DTO）
+- ✅ 20 张表 TypeORM Entity 定义
+- ✅ 10 个业务模块 Module/Controller/Service 骨架
+- ✅ Redis 缓存封装（含分布式锁和滑动窗口限流）
+- ✅ JWT 认证 + RBAC 权限体系
+- ✅ 共享类型定义
+
+**后续阶段待实现：**
+- 🔲 具体业务逻辑（Service 方法体目前返回 stub）
+- 🔲 数据库连接与迁移脚本
+- 🔲 支付宝 SDK 对接
+- 🔲 单元测试 / E2E 测试
+- 🔲 Docker 容器化部署
+
+## 📝 开发规范
+
+- **命名约定**: kebab-case 文件名 / PascalCase 类名 / camelCase 变量 / UPPER_SNAKE_CASE 常量
+- **注释要求**: JSDoc 风格，每个公开方法必须有注释
+- **分层原则**: Controller(路由+校验) → Service(业务逻辑) → Repository(数据访问)
+- **依赖注入**: Constructor 方式注入，便于测试
+
+---
+
+*Generated by AI Coding Assistant — 第一阶段基础架构完成*
