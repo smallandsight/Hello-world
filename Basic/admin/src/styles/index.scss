@@ -1,0 +1,173 @@
+// ============================================
+// 全局样式变量与工具类 - 古月租车商家后台
+// ============================================
+
+// ---------- CSS 变量 ----------
+:root {
+  // 主色调
+  --primary-color: #1890ff;
+  --primary-color-light: #40a9ff;
+  --primary-color-dark: #096dd9;
+
+  // 商务深蓝
+  --biz-blue-dark: #1a3a5c;
+  --biz-blue-medium: #2c4f6e;
+  --biz-blue-light: #3d6387;
+
+  // 功能色
+  --success-color: #52c41a;
+  --warning-color: #faad14;
+  --danger-color: #ff4d4f;
+  --info-color: #1890ff;
+
+  // 文字色
+  --text-primary: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --text-placeholder: #c0c4cc;
+
+  // 边框
+  --border-color: #dcdfe6;
+  --border-color-light: #e4e7ed;
+
+  // 背景色
+  --bg-page: #f0f2f5;
+  --bg-white: #ffffff;
+
+  // 阴影
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  // 圆角
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  // 侧边栏
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+}
+
+// ---------- 重置样式 ----------
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
+    sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background-color: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  &:hover {
+    color: var(--primary-color-light);
+  }
+}
+
+ul, ol {
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+// ---------- 滚动条美化 ----------
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #c1c1c1;
+  border-radius: 3px;
+  &:hover {
+    background-color: #a8a8a8;
+  }
+}
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+// ---------- 通用工具类 ----------
+.clearfix::after {
+  content: '';
+  display: table;
+  clear: both;
+}
+
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.text-primary { color: var(--text-primary) !important; }
+.text-regular { color: var(--text-regular) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+
+.text-success { color: var(--success-color) !important; }
+.text-warning { color: var(--warning-color) !important; }
+.text-danger { color: var(--danger-color) !important; }
+.text-info { color: var(--info-color) !important; }
+
+.font-bold { font-weight: 600; }
+.font-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cursor-pointer { cursor: pointer; }
+
+// ---------- Flex 工具 ----------
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.flex-1 { flex: 1; }
+
+// ---------- 过渡动画 ----------
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.28s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.28s ease;
+}
+.slide-right-enter-from {
+  transform: translateX(-20px);
+  opacity: 0;
+}
+.slide-right-leave-to {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+// ---------- Element Plus 覆盖 ----------
+.el-menu--collapse {
+  .el-sub-menu__title span,
+  .el-sub-menu__title .el-sub-menu__icon-arrow {
+    display: none;
+  }
+}

@@ -20,12 +20,6 @@ import { StaffRole } from './entities/staff-role.entity';
   ],
   controllers: [StaffController],
   providers: [StaffService],
-  exports: [StaffService, RoleService],
+  exports: [StaffService],
 })
 export class StaffModule {}
-
-// 角色服务（与 Staff 同模块）
-@Injectable()
-export class RoleService {
-  // TODO: 角色 CRUD
-}

@@ -25,6 +25,19 @@ import { CouponModule } from './modules/coupon/coupon.module';
 import { TicketModule } from './modules/ticket/ticket.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { MessageModule } from './modules/message/message.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { StoreModule } from './modules/store/store.module';
+import { ViolationModule } from './modules/violation/violation.module';
+import { InvoiceModule } from './modules/invoice/invoice.module';
+import { WalletModule } from './modules/wallet/wallet.module';
+import { RenewalModule } from './modules/renewal/renewal.module';
+import { ReviewModule } from './modules/review/review.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
+import { FavoriteModule } from './modules/favorite/favorite.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { ReportModule } from './modules/report/report.module';
+import { ActivityModule } from './modules/activity/activity.module';
+import { OperationModule } from './modules/operation/operation.module';
 
 @Module({
   imports: [
@@ -51,6 +64,19 @@ import { MessageModule } from './modules/message/message.module';
     TicketModule,
     StaffModule,
     MessageModule,
+    AdminModule,
+    StoreModule,
+    ViolationModule,
+    InvoiceModule,
+    WalletModule,
+    RenewalModule,
+    ReviewModule,
+    FeedbackModule,
+    FavoriteModule,
+    AnalyticsModule,
+    ReportModule,
+    ActivityModule,
+    OperationModule,
   ],
 
   controllers: [AppController],

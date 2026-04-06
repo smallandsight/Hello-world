@@ -48,6 +48,24 @@ export class Refund extends BaseEntity {
   })
   refundAmountCents: number;
 
+  /** 原支付金额(分) — 用于时间梯度退款计算 */
+  @Column({
+    type: 'bigint',
+    nullable: true,
+    default: null,
+    comment: '原支付金额(分)',
+  })
+  originalAmountCents: number | null;
+
+  /** 退回比例(整数百分比, 如80=80%) — 时间梯度退款 */
+  @Column({
+    type: 'tinyint',
+    nullable: true,
+    default: null,
+    comment: '退回比例(整数百分比)',
+  })
+  refundRatio: number | null;
+
   /**
    * 退款类型：order(订单退款)/deposit(押金退还)/preauth(预授权解冻)
    */

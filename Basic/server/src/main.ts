@@ -3,21 +3,36 @@
  * 负责创建 NestApplication 实例、注册全局中间件、启动 HTTP 监听
  */
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, MiddlewareFunction } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+// Winston 日志集成
+import { logger as winstonLogger } from './common/logger/winston.config';
+// 安全中间件
+import { SecurityMiddleware } from './common/security/security.middleware';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+    // 使用Winston替代默认日志
+    logger: winstonLogger,
   });
 
-  // --- 安全中间件 ---
-  app.use(helmet());
+  // --- 基础安全中间件（Helmet + Compression）---
+  app.use(helmet({
+    contentSecurityPolicy: false, // 由SecurityMiddleware单独处理CSP
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: true,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    originAgentCluster: true,
+  }));
   app.use(compression());
+
+  // --- 自定义安全中间件（增强安全头 + Request ID）---
+  const securityMiddleware = new SecurityMiddleware();
+  app.use((req, res, next) => securityMiddleware.use(req, res, next));
 
   // --- 全局前缀 ---
   const apiPrefix = process.env.API_PREFIX || '/v1';
