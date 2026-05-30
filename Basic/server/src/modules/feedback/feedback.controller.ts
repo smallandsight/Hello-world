@@ -47,7 +47,7 @@ export class FeedbackController {
       size: Math.min(Number(query?.size) || 20, 50),
       status: query?.status as any,
       category: query?.category as any,
-    });
+    } as any);
   }
 
   @Get(':id')

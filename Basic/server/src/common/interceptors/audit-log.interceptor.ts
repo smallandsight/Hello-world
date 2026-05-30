@@ -34,7 +34,7 @@ export class AuditLogInterceptor implements NestInterceptor {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user || request.staff || {};
+    const user = (request as any).user || (request as any).staff || {};
     const now = new Date();
 
     return next.handle().pipe(

@@ -10,6 +10,7 @@ import { AppService } from './app.service';
 
 // 公共基础设施
 import { CommonModule } from './common/common.module';
+import { AppConfigModule } from './config/config.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { QueryExceptionFilter } from './common/filters/query-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -38,6 +39,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { ReportModule } from './modules/report/report.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { OperationModule } from './modules/operation/operation.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { GpsModule } from './modules/gps/gps.module';
 
 @Module({
   imports: [
@@ -52,7 +55,7 @@ import { OperationModule } from './modules/operation/operation.module';
     CommonModule,
 
     // 数据库配置
-    import('./config/config.module').then((m) => m.AppConfigModule),
+    AppConfigModule,
 
     // ========== 业务 FeatureModule ==========
     AuthModule,
@@ -77,6 +80,8 @@ import { OperationModule } from './modules/operation/operation.module';
     ReportModule,
     ActivityModule,
     OperationModule,
+    ChatModule,
+    GpsModule,
   ],
 
   controllers: [AppController],

@@ -75,9 +75,14 @@ export class RedisService implements OnModuleDestroy {
       typeof value === 'string' ? value : JSON.stringify(value);
 
     if (ttlSeconds > 0) {
-      return client.set(key, strValue, 'EX', ttlSeconds);
+      return (client.set as any)(key, strValue, 'EX', ttlSeconds);
     }
     return client.set(key, strValue);
+  }
+
+  /** setex 别名：先 value 后 ttl（兼容 ioredis 风格调用） */
+  async setex(key: string, ttlSeconds: number, value: string): Promise<'OK' | null> {
+    return this.set(key, value, ttlSeconds);
   }
 
   /**
@@ -100,7 +105,7 @@ export class RedisService implements OnModuleDestroy {
    */
   async del(key: string | string[]): Promise<number> {
     const client = await this.getClient();
-    return client.del(key);
+    return client.del(key as any);
   }
 
   /**
@@ -195,6 +200,12 @@ export class RedisService implements OnModuleDestroy {
 
   // ==================== 批量操作 ====================
 
+  /** 模糊匹配键名（谨慎使用，生产环境建议用 SCAN） */
+  async keys(pattern: string): Promise<string[]> {
+    const client = await this.getClient();
+    return client.keys(pattern);
+  }
+
   /** 批量获取多个键的值 */
   async mget<T>(keys: string[]): Promise<(T | null)[]> {
     const client = await this.getClient();
@@ -221,6 +232,32 @@ export class RedisService implements OnModuleDestroy {
     return client.mset(...flat as [string, string, ...string[]]);
   }
 
+  // ==================== List 操作 ====================
+
+  /** 向列表右侧追加元素 */
+  async rpush(key: string, ...values: string[]): Promise<number> {
+    const client = await this.getClient();
+    return client.rpush(key, ...values);
+  }
+
+  /** 获取列表长度 */
+  async llen(key: string): Promise<number> {
+    const client = await this.getClient();
+    return client.llen(key);
+  }
+
+  /** 获取列表指定范围的元素 */
+  async lrange(key: string, start: number, stop: number): Promise<string[]> {
+    const client = await this.getClient();
+    return client.lrange(key, start, stop);
+  }
+
+  /** 获取 Pipeline 用于批量操作 */
+  async pipeline(): Promise<ReturnType<Redis['pipeline']>> {
+    const client = (await this.getClient()) as Redis;
+    return client.pipeline();
+  }
+
   // ==================== 分布式锁 ====================
 
   /**
@@ -236,7 +273,7 @@ export class RedisService implements OnModuleDestroy {
     ttlSeconds: number = 30,
   ): Promise<boolean> {
     const client = await this.getClient();
-    const result = await client.set(lockKey, value, 'NX', 'EX', ttlSeconds);
+    const result = await (client.set as any)(lockKey, value, 'NX', 'EX', ttlSeconds);
     return result === 'OK';
   }
 

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In } from 'typeorm';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { Staff } from './entities/staff.entity';
 import { Role } from './entities/role.entity';
 import { StaffRole } from './entities/staff-role.entity';
@@ -192,7 +192,7 @@ export class StaffService {
     }
 
     await this.assignRolesInternal(staffId, dto.roleIds);
-    return { message: '角色分配成功', staffId, assignedRoles: roles.map((r) => ({ id: r.id, name: r.name })) };
+    return { message: '角色分配成功', staffId, assignedRoles: roles.map((r) => ({ id: r.id, name: r.roleName })) };
   }
 
   /**
@@ -225,8 +225,8 @@ export class StaffService {
 
     return roles.map((r) => ({
       id: r.id,
-      name: r.name,
-      code: r.code,
+      name: r.roleName,
+      code: r.roleCode,
       description: r.description,
       permissionCount: r.permissions?.length || 0,
     }));
@@ -248,7 +248,7 @@ export class StaffService {
     for (const role of staff.roles) {
       if (role.permissions) {
         for (const perm of role.permissions) {
-          permissions.add(perm.code);
+          permissions.add(perm.permissionCode);
         }
       }
     }
@@ -290,7 +290,7 @@ export class StaffService {
       statusLabel: STAFF_STATUS_MAP[staff.status] || '未知',
       lastLoginAt: staff.lastLoginAt?.toISOString(),
       loginCount: staff.loginCount,
-      roles: staff.roles?.map((r) => ({ id: r.id, name: r.name, code: r.code })) || [],
+      roles: staff.roles?.map((r) => ({ id: r.id, name: r.roleName, code: r.roleCode })) || [],
       createdAt: staff.createdAt.toISOString(),
     };
   }
@@ -307,7 +307,7 @@ export class StaffService {
       phone: staff.phone,
       updatedAt: staff.updatedAt.toISOString(),
       permissions: staff.roles
-        ?.flatMap((r) => r.permissions?.map((p) => p.code) || [])
+        ?.flatMap((r) => r.permissions?.map((p) => p.permissionCode) || [])
         .filter(Boolean),
     };
   }

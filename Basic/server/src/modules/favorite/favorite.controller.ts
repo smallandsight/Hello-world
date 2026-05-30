@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Delete,
+  Body,
   Param,
   Query,
   UseGuards,
@@ -58,7 +59,7 @@ export class FavoriteController {
     return this.favoriteService.getFavorites(Number(payload.sub), {
       page: Number(query?.page) || 1,
       size: Math.min(Number(query?.size) || 20, 50),
-    });
+    } as any);
   }
 
   @Get('check/:vehicleId')

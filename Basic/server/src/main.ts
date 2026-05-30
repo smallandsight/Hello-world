@@ -3,9 +3,9 @@
  * 负责创建 NestApplication 实例、注册全局中间件、启动 HTTP 监听
  */
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger, MiddlewareFunction } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as compression from 'compression';
+import compression from 'compression';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 // Winston 日志集成
@@ -32,7 +32,7 @@ async function bootstrap() {
 
   // --- 自定义安全中间件（增强安全头 + Request ID）---
   const securityMiddleware = new SecurityMiddleware();
-  app.use((req, res, next) => securityMiddleware.use(req, res, next));
+  app.use((req: any, res: any, next: any) => securityMiddleware.use(req, res, next));
 
   // --- 全局前缀 ---
   const apiPrefix = process.env.API_PREFIX || '/v1';

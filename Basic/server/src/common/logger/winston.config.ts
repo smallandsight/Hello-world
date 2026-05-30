@@ -30,7 +30,7 @@ const consoleFormat = winston.format.combine(
   winston.format.printf(({ timestamp, level, message, context, trace, ...meta }) => {
     const ctx = context ? `[${context}]` : '';
     const metaStr = Object.keys(meta).length ? `\n${JSON.stringify(meta, null, 2)}` : '';
-    const traceStr ?= trace ? `\n${trace}` : '';
+    const traceStr = trace ? `\n${trace}` : '';
     return `${timestamp} ${level} ${ctx} ${message}${metaStr}${traceStr}`;
   }),
 );

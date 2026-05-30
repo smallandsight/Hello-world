@@ -35,7 +35,6 @@ export const DatabaseConfig = TypeOrmModule.forRootAsync({
     // 连接池
     extra: {
       connectionLimit: 10,
-      acquireTimeout: 60000,
       waitForConnections: true,
       connectTimeout: 10000,
     },

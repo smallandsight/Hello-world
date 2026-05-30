@@ -3,7 +3,8 @@
  * 提供连接参数和 RedisModule 异步注册
  */
 import { Module, Global } from '@nestjs/common';
-import ConfigModule from './config.module';
+// Redis配置不依赖ConfigModule，直接使用process.env
+
 
 export interface RedisConfigOptions {
   host: string;

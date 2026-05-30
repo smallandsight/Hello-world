@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { Vehicle } from './vehicle.entity';
-import { MaintenanceType } from '../../../../shared/types/vehicle.types';
+import { MaintenanceType } from '../../../shared/types/vehicle.types';
 
 @Entity('vehicle_models')
 export class VehicleModel extends BaseEntity {

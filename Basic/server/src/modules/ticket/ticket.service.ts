@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In, LessThan, MoreThanOrEqual } from 'typeorm';
 import { Ticket } from './entities/ticket.entity';
 import { TicketReply } from './entities/ticket-reply.entity';
@@ -74,7 +74,7 @@ export class TicketService {
 
     const ticket = this.ticketRepo.create({
       userId,
-      ticketType: dto.ticketType || 'problem',
+      ticketType: (dto.ticketType || 'other') as any,
       title: dto.title,
       content: dto.content,
       orderId: dto.orderId || null,
@@ -146,11 +146,11 @@ export class TicketService {
 
     // 如果已关闭或已解决，自动重新打开
     if ([TicketStatus.CLOSED, TicketStatus.RESOLVED].includes(ticket.status)) {
-      await this.changeStatus(ticketId, TicketStatus.REOPENED, 'system', '用户追加回复，自动重开');
+      await this.changeStatus(Number(ticketId), TicketStatus.REOPENED, 'system', 0, '用户追加回复，自动重开');
     }
     // 如果在等待用户回复，切回处理中
     if (ticket.status === TicketStatus.WAITING_USER) {
-      await this.changeStatus(ticketId, TicketStatus.PROCESSING, 'system', '用户已回复');
+      await this.changeStatus(Number(ticketId), TicketStatus.PROCESSING, 'system', 0, '用户已回复');
     }
 
     const reply = this.replyRepo.create({

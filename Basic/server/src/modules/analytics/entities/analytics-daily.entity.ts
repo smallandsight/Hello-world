@@ -145,7 +145,7 @@ export class AnalyticsDaily {
   pointsIssued: string;
 
   /** 积分消耗 */
-  @Column({ type: 'bigint', default: 0, comment: '积分消耗' */
+  @Column({ type: 'bigint', default: 0, comment: '积分消耗' })
   pointsConsumed: string;
 
   // ==================== 客服指标 ====================

@@ -8,6 +8,7 @@ import { Store } from '../vehicle/entities/store.entity';
 import { Order } from '../order/entities/order.entity';
 import { Payment } from '../payment/entities/payment.entity';
 import { User } from '../user/entities/user.entity';
+import { AuditLog } from './entities/audit-log.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { User } from '../user/entities/user.entity';
       Order,
       Payment,
       User,
+      AuditLog,
     ]),
   ],
   controllers: [AdminController],

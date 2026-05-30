@@ -56,7 +56,7 @@ export interface AlipayRefundResult {
 @Injectable()
 export class AlipayService {
   private readonly logger = new Logger(AlipayService.name);
-  private sdk: AlipaySdk.default | null = null;
+  private sdk: any = null;
   private config: AlipayConfig;
 
   constructor() {
@@ -84,7 +84,7 @@ export class AlipayService {
     }
 
     try {
-      this.sdk = new AlipaySdk.default({
+      this.sdk = new (AlipaySdk as any).AlipaySdk({
         appId: this.config.appId,
         privateKey: this.config.privateKey,
         alipayPublicKey: this.config.alipayPublicKey || undefined,
@@ -301,7 +301,7 @@ export class AlipayService {
           out_trade_no: params.outTradeNo,
           total_amount: params.totalAmount.toFixed(2),
           subject: params.subject,
-          body: params.body || `古月租车-${params.subject`,
+          body: params.body || `古月租车-${params.subject}`,
           buyer_id: params.buyerId || undefined,
           timeout_express: params.timeoutExpress || '30m',
           extend_params: params.extendParams || undefined,
@@ -388,7 +388,7 @@ export class AlipayService {
     outRequestNo: string;       // 退款请求号（幂等）
     tradeNo?: string;           // 支付宝交易号（可选）
   }): Promise<AlipayRefundResult> {
-    if (!this.sdk) throw new Error('支付宝服务未正确�置');
+    if (!this.sdk) throw new Error('支付宝服务未正确配置');
 
     try {
       const result = await this.sdk.exec('alipay.trade.refund', {

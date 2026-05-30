@@ -17,9 +17,10 @@
  * 文档参考：T3W14-1 GPS轨迹模块需求
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThanOrEqual, LessThan } from 'typeorm';
-import Redis from 'ioredis';
+import { GpsPoint as GpsPointEntity } from './gps-point.entity';
+import { RedisService } from '../../common/redis/redis.service';
 
 // ==================== 类型定义 ====================
 
@@ -81,7 +82,7 @@ export interface VehicleLiveLocation {
 @Injectable()
 export class GpsTrackService {
   private readonly logger = new Logger(GpsTrackService.name);
-  
+
   /** Redis key 前缀 */
   private readonly REDIS_PREFIX = 'gps:';
   /** 实时位置缓存过期时间（秒）—— 30秒不更新视为离线 */
@@ -90,9 +91,9 @@ export class GpsTrackService {
   private readonly BUFFER_MAX = 500;
 
   constructor(
-    @InjectRepository(GpsPointEntity) // 需要创建对应的Entity
-    private gpsRepo: Repository<GpsPointEntity>,
-    private redisClient: Redis,
+    @InjectRepository(GpsPointEntity)
+    private readonly gpsRepo: Repository<GpsPointEntity>,
+    private readonly redis: RedisService,
   ) {}
 
   // ==================== 数据接收 ====================
@@ -122,14 +123,14 @@ export class GpsTrackService {
         heading: point.heading || 0,
         timestamp: point.timestamp || Date.now(),
       });
-      await this.redisClient.setex(liveKey, this.LIVE_TTL, locationData);
+      await this.redis.setex(liveKey, this.LIVE_TTL, locationData);
 
       // 3. 加入缓冲队列（用于批量写入MySQL）
       const bufferKey = `${this.REDIS_PREFIX}buffer:${point.vehicleId}`;
-      await this.redisClient.rpush(bufferKey, JSON.stringify(point));
+      await this.redis.rpush(bufferKey, JSON.stringify(point));
       
       // 缓冲区达到阈值或手动触发时批量写入
-      const bufferSize = await this.redisClient.llen(bufferKey);
+      const bufferSize = await this.redis.llen(bufferKey);
       if (bufferSize >= 50) {
         await this.flushBuffer(point.vehicleId);
       }
@@ -174,7 +175,7 @@ export class GpsTrackService {
         // 更新最新实时位置（取最后一个点）
         const latest = pts[pts.length - 1];
         const liveKey = `${this.REDIS_PREFIX}live:${vehicleId}`;
-        await this.redisClient.setex(liveKey, this.LIVE_TTL, JSON.stringify({
+        await this.redis.setex(liveKey, this.LIVE_TTL, JSON.stringify({
           longitude: latest.longitude,
           latitude: latest.latitude,
           speed: latest.speed || 0,
@@ -184,7 +185,7 @@ export class GpsTrackService {
 
         // 全部加入缓冲区
         const bufferKey = `${this.REDIS_PREFIX}buffer:${vehicleId}`;
-        const pipe = this.redisClient.pipeline();
+        const pipe = await this.redis.pipeline();
         for (const p of pts) {
           pipe.rpush(bufferKey, JSON.stringify(p));
         }
@@ -208,7 +209,7 @@ export class GpsTrackService {
    */
   async getVehicleLiveLocation(vehicleId: number): Promise<VehicleLiveLocation | null> {
     const liveKey = `${this.REDIS_PREFIX}live:${vehicleId}`;
-    const data = await this.redisClient.get(liveKey);
+    const data = await this.redis.get(liveKey);
 
     if (!data) {
       // 尝试从数据库取最后一个点
@@ -231,7 +232,7 @@ export class GpsTrackService {
       };
     }
 
-    const loc = JSON.parse(data);
+    const loc = JSON.parse(data as string);
     const ageMs = Date.now() - loc.timestamp;
     
     return {
@@ -437,13 +438,13 @@ export class GpsTrackService {
   private async flushBuffer(vehicleId: number): Promise<number> {
     const bufferKey = `${this.REDIS_PREFIX}buffer:${vehicleId}`;
 
-    const count = await this.redisClient.llen(bufferKey);
+    const count = await this.redis.llen(bufferKey);
     if (count === 0) return 0;
 
-    const rawPoints = await this.redisClient.lrange(bufferKey, 0, -1);
+    const rawPoints = await this.redis.lrange(bufferKey, 0, -1);
 
     // 清空缓冲区
-    await this.redisClient.del(bufferKey);
+    await this.redis.del(bufferKey);
 
     try {
       const entities = rawPoints.map((raw) => {
@@ -594,7 +595,7 @@ export class GpsTrackService {
   async flushAllBuffers(): Promise<{ vehicles: number; totalPoints: number }> {
     // 扫描所有buffer keys
     const pattern = `${this.REDIS_PREFIX}buffer:*`;
-    const keys = await this.redisClient.keys(pattern);
+    const keys = await this.redis.keys(pattern);
 
     let totalPoints = 0;
     for (const key of keys) {
@@ -609,19 +610,3 @@ export class GpsTrackService {
   }
 }
 
-/** 占位符 - 实际应使用已有的 GpsPoint Entity 或创建新表 */
-class GpsPointEntity {
-  id: number;
-  vehicleId: number;
-  orderId?: number;
-  longitude: number;
-  latitude: number;
-  speed: number;
-  heading: number;
-  accuracy?: number;
-  altitude?: number;
-  odometer?: number;
-  batteryLevel?: number;
-  source: string;
-  timestamp: Date;
-}

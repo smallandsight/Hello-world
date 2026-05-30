@@ -131,6 +131,6 @@ export class Staff extends BaseEntity {
   // ========== 关系 ==========
 
   /** 多对多：员工-角色关系 */
-  @ManyToMany(() => Role, (role) => role.staffs)
+  @ManyToMany(() => Role, (role) => (role as any).staffs)
   roles?: Role[];
 }

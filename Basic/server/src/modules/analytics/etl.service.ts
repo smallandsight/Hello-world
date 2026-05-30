@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import { InjectRedis } from '../../common/redis/redis.module';
-import Redis from 'ioredis';
+import { RedisService } from '../../common/redis/redis.service';
 import { AnalyticsDaily } from './entities/analytics-daily.entity';
 import { AnalyticsWeekly } from './entities/analytics-weekly.entity';
 import { AnalyticsMonthly } from './entities/analytics-monthly.entity';
@@ -43,7 +42,7 @@ export class EtlService {
     private userCouponRepo: Repository<UserCoupon>,
     @InjectRepository(PointsRecord)
     private pointsRecordRepo: Repository<PointsRecord>,
-    @InjectRedis() private redis: Redis,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -268,8 +267,8 @@ export class EtlService {
     });
 
     // 活跃用户数（有登录或有操作的用户）
-    const activeUserIds = await this.redis.smembers(`active_users:${daily.date}`);
-    daily.activeUsers = activeUserIds.length || daily.newUsers;
+    const activeUserIds = await this.redisService.get<string[]>(`active_users:${daily.date}`);
+    daily.activeUsers = (activeUserIds || []).length || daily.newUsers;
 
     // 下单用户数
     const orderUsers = await this.orderRepo
@@ -318,9 +317,9 @@ export class EtlService {
     daily.cancelledOrders = cancelledOrders.length;
 
     // 金额计算
-    const orderAmount = newOrders.reduce((sum, o) => sum + Number(o.totalAmountCents || 0), 0);
+    const orderAmount = newOrders.reduce((sum, o) => sum + Number(o.originalAmountCents || 0), 0);
     const paidAmount = newOrders.reduce((sum, o) => sum + Number(o.paidAmountCents || 0), 0);
-    const couponDiscount = newOrders.reduce((sum, o) => sum + Number(o.discountAmountCents || 0), 0);
+    const couponDiscount = newOrders.reduce((sum, o) => sum + Number(o.couponDiscountCents || 0), 0);
 
     daily.orderAmountCents = String(orderAmount);
     daily.paidAmountCents = String(paidAmount);
@@ -343,7 +342,7 @@ export class EtlService {
 
     // 出租车辆
     daily.rentedVehicles = await this.vehicleRepo.count({
-      where: { status: VehicleStatus.RENTED },
+      where: { status: VehicleStatus.IN_USE },
     });
 
     // 利用率
@@ -361,7 +360,7 @@ export class EtlService {
     const payments = await this.paymentRepo.find({
       where: {
         createdAt: Between(start, end),
-        status: 'success',
+        status: 2,
       },
     });
 
@@ -375,9 +374,10 @@ export class EtlService {
     for (const p of payments) {
       // 简化处理：按类型分类（实际应从订单明细拆分）
       const amount = Number(p.amountCents || 0);
-      if (p.channel === 'rental') {
+      const payType = (p as any).payType || 'payment';
+      if (payType === 'rental') {
         daily.rentalIncomeCents = String(Number(daily.rentalIncomeCents) + amount);
-      } else if (p.channel === 'insurance') {
+      } else if (payType === 'insurance') {
         daily.insuranceIncomeCents = String(Number(daily.insuranceIncomeCents) + amount);
       }
     }
@@ -399,8 +399,8 @@ export class EtlService {
       where: { createdAt: Between(start, end) },
     });
 
-    daily.successPayments = payments.filter(p => p.status === 'success').length;
-    daily.failedPayments = payments.filter(p => p.status === 'failed').length;
+    daily.successPayments = payments.filter(p => p.status === 2).length;
+    daily.failedPayments = payments.filter(p => p.status === 5).length;
 
     const total = daily.successPayments + daily.failedPayments;
     daily.paymentSuccessRate = total > 0
@@ -416,7 +416,7 @@ export class EtlService {
     // 优惠券使用
     daily.couponUsed = await this.userCouponRepo.count({
       where: {
-        status: 'used',
+        status: 1,
         usedAt: Between(start, end),
       },
     });
@@ -431,11 +431,11 @@ export class EtlService {
       where: { createdAt: Between(start, end) },
     });
 
-    daily.pointsIssued = String(
-      pointsRecords.filter(r => Number(r.points) > 0).reduce((sum, r) => sum + Number(r.points), 0),
+    (daily as any).pointsIssued = String(
+      pointsRecords.filter(r => Number((r as any).amount) > 0).reduce((sum, r) => sum + Number((r as any).amount), 0),
     );
-    daily.pointsConsumed = String(
-      Math.abs(pointsRecords.filter(r => Number(r.points) < 0).reduce((sum, r) => sum + Number(r.points), 0)),
+    (daily as any).pointsConsumed = String(
+      Math.abs(pointsRecords.filter(r => Number((r as any).amount) < 0).reduce((sum, r) => sum + Number((r as any).amount), 0)),
     );
   }
 
@@ -450,7 +450,7 @@ export class EtlService {
 
     daily.resolvedTickets = await this.ticketRepo.count({
       where: {
-        status: 'resolved',
+        status: 3,
         updatedAt: Between(start, end),
       },
     });
@@ -461,8 +461,8 @@ export class EtlService {
     });
     if (tickets.length > 0) {
       const totalResponseTime = tickets.reduce((sum, t) => {
-        if (t.firstReplyAt && t.createdAt) {
-          return sum + (new Date(t.firstReplyAt).getTime() - new Date(t.createdAt).getTime()) / 1000;
+        if ((t as any).firstReplyAt || (t as any).createdAt && t.createdAt) {
+          return sum + (new Date((t as any).firstReplyAt).getTime() - new Date(t.createdAt).getTime()) / 1000;
         }
         return sum;
       }, 0);
@@ -484,18 +484,18 @@ export class EtlService {
     });
 
     for (const order of orders) {
-      const storeId = order.pickupStoreId;
+      const storeId = order.storeId;
       if (!storeMetrics[storeId]) {
         storeMetrics[storeId] = {
           storeId,
-          storeName: order.pickupStore?.name || '未知门店',
+          storeName: order.store?.storeName || '未知门店',
           orders: 0,
           amount: 0,
           newUsers: 0,
         };
       }
       storeMetrics[storeId].orders++;
-      storeMetrics[storeId].amount += Number(order.totalAmountCents || 0);
+      storeMetrics[storeId].amount += Number(order.originalAmountCents || 0);
     }
 
     daily.storeMetrics = storeMetrics;
@@ -520,14 +520,14 @@ export class EtlService {
       if (!modelMetrics[modelId]) {
         modelMetrics[modelId] = {
           modelId,
-          modelName: order.vehicle?.model?.name || '未知车型',
+          modelName: (order.vehicle?.model as any)?.modelName || '未知车型',
           orders: 0,
           amount: 0,
           utilizationRate: 0,
         };
       }
       modelMetrics[modelId].orders++;
-      modelMetrics[modelId].amount += Number(order.totalAmountCents || 0);
+      modelMetrics[modelId].amount += Number(order.originalAmountCents || 0);
     }
 
     daily.modelMetrics = modelMetrics;
@@ -660,7 +660,7 @@ export class EtlService {
     const highValueUsers = await this.orderRepo
       .createQueryBuilder('order')
       .select('order.userId')
-      .addSelect('SUM(order.totalAmountCents)', 'total')
+      .addSelect('SUM(order.originalAmountCents)', 'total')
       .groupBy('order.userId')
       .having('total > :threshold', { threshold: 500000 }) // 5000元
       .getRawMany();
@@ -680,13 +680,13 @@ export class EtlService {
     // 门店排名
     const storeStats = await this.orderRepo
       .createQueryBuilder('order')
-      .leftJoin('order.pickupStore', 'store')
-      .select('order.pickupStoreId', 'storeId')
+      .leftJoin('order.store', 'store')
+      .select('order.storeId', 'storeId')
       .addSelect('store.name', 'storeName')
       .addSelect('COUNT(*)', 'orders')
-      .addSelect('SUM(order.totalAmountCents)', 'amount')
+      .addSelect('SUM(order.originalAmountCents)', 'amount')
       .where('order.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-      .groupBy('order.pickupStoreId')
+      .groupBy('order.storeId')
       .orderBy('amount', 'DESC')
       .limit(10)
       .getRawMany();
@@ -707,7 +707,7 @@ export class EtlService {
       .select('vehicle.modelId', 'modelId')
       .addSelect('model.name', 'modelName')
       .addSelect('COUNT(*)', 'orders')
-      .addSelect('SUM(order.totalAmountCents)', 'amount')
+      .addSelect('SUM(order.originalAmountCents)', 'amount')
       .where('order.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
       .andWhere('vehicle.modelId IS NOT NULL')
       .groupBy('vehicle.modelId')
@@ -763,6 +763,6 @@ export class EtlService {
 
   private async clearAnalyticsCache(type: string, key: string): Promise<void> {
     const cacheKey = `analytics:${type}:${key}`;
-    await this.redis.del(cacheKey);
+    await this.redisService.del(cacheKey);
   }
 }

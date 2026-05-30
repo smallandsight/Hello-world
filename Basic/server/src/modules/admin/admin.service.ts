@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository,
   Like,
@@ -350,7 +350,7 @@ export class AdminService {
     if (!order) throw new NotFoundException('订单不存在');
     return {
       ...order,
-      statusLabel: ORDER_STATUS_LABELS[order.status],
+      statusLabel: (ORDER_STATUS_LABELS as any)[order.status],
     };
   }
 
@@ -373,7 +373,7 @@ export class AdminService {
       message: '订单状态已手动调整',
       orderId: id,
       previousStatus: prevStatus,
-      previousStatusLabel: ORDER_STATUS_LABELS[prevStatus],
+      previousStatusLabel: (ORDER_STATUS_LABELS as any)[prevStatus],
       newStatus,
       newStatusLabel:
         ORDER_STATUS_LABELS[newStatus as OrderStatus] ||
@@ -418,7 +418,7 @@ export class AdminService {
 
     // 脱敏处理：隐藏身份证号等敏感字段
     const safeList = list.map((u) => {
-      const { idCard, ...rest } = u;
+      const { idCardNo: _idCard, passwordHash: _pw, ...rest } = u as any;
       return rest;
     });
 
@@ -714,7 +714,7 @@ export class AdminService {
       topVehicles: topVehicles.map((v: any) => ({
         vehicleId: v.vehicleId,
         orderCount: parseInt(v.orderCount || '0', 10),
-        avgFareCents: parseInt(Math.round(v.avgFare || 0), 10),
+        avgFareCents: Math.round(v.avgFare || 0),
       })),
       recentPayments,
       pendingTickets,
@@ -740,11 +740,11 @@ export class AdminService {
       const log = this.auditLogRepo.create({
         ...dto,
         detail: typeof dto.detail === 'object' ? JSON.stringify(dto.detail) : dto.detail,
-      });
+      } as any);
       await this.auditLogRepo.save(log);
     } catch (error) {
       // 审计日志写入失败不应影响主业务
-      logger.error(`[AuditLog] 写入失败: ${error.message}`);
+      logger.error(`[AuditLog] 写入失败: ${(error as Error).message}`);
     }
   }
 

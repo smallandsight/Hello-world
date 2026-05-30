@@ -14,7 +14,7 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PointsService } from './points.service';
-import { PointsRecordQueryDto } from './points.dto';
+import { PointsRecordQueryDto } from './points.service';
 
 @ApiTags('营销模块-积分')
 @ApiBearerAuth('access-token')

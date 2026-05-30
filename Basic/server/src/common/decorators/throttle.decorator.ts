@@ -1,18 +1,33 @@
-import { MethodMetaData } from '@nestjs/common';
-import { THROTTLE_PRESETS, type ThrottleOptions } from './throttle.guard';
+import { SetMetadata } from '@nestjs/common';
 
-/**
- * 限流装饰器
- * 使用方式：@Throttle({ windowMs: 60000, limit: 100 })
- *
- * 也支持预设策略：@Throttle('login') 等价于 @Throttle({ windowMs: 900000, limit: 5 })
- */
+export const THROTTLE_KEY = '__throttle__';
+
+export interface ThrottleOptions {
+  windowMs?: number;
+  limit?: number;
+  keyPrefix?: string;
+}
+
+const DEFAULT_OPTIONS: ThrottleOptions = {
+  windowMs: 60000,
+  limit: 100,
+  keyPrefix: 'throttle',
+};
+
+export const THROTTLE_PRESETS: Record<string, ThrottleOptions> = {
+  global: { windowMs: 60_000, limit: 100 },
+  user: { windowMs: 60_000, limit: 30 },
+  login: { windowMs: 900_000, limit: 5 },
+  sms: { windowMs: 60_000, limit: 1 },
+  sensitive: { windowMs: 300_000, limit: 5 },
+};
+
 export function Throttle(optionsOrKey?: string | ThrottleOptions) {
   let optionsObj: ThrottleOptions;
 
   if (typeof optionsOrKey === 'string') {
     const preset = THROTTLE_PRESETS[optionsOrKey];
-    if (!preset) throw new Error(`未知限流策略: ${optionsOrKey}`);
+    if (!preset) throw new Error(`Unknown throttle preset: ${optionsOrKey}`);
     optionsObj = preset;
   } else if (typeof optionsOrKey === 'object') {
     optionsObj = optionsOrKey;
@@ -20,7 +35,5 @@ export function Throttle(optionsOrKey?: string | ThrottleOptions) {
     optionsObj = DEFAULT_OPTIONS;
   }
 
-  return (target: object, key: string, descriptor: PropertyDescriptor) => {
-    MethodMetaData(METADATA_KEY, [JSON.stringify(optionsObj)])(target, key, descriptor);
-  };
+  return SetMetadata(THROTTLE_KEY, [JSON.stringify(optionsObj)]);
 }

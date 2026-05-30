@@ -18,15 +18,16 @@ import { Order } from '../../order/entities/order.entity';
 export class User extends BaseEntity {
   // ========== 基本信息 ==========
 
-  /** 手机号（脱敏存储） */
+  /** 手机号（脱敏存储，支付宝登录时可为空） */
   @Index({ unique: true })
   @Column({
     type: 'varchar',
     length: 20,
     name: 'phone',
+    nullable: true,
     comment: '手机号',
   })
-  phone: string;
+  phone: string | null;
 
   /** 昵称 */
   @Column({

@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import { InjectRedis } from '../../common/redis/redis.module';
-import Redis from 'ioredis';
+import { RedisService } from '../../common/redis/redis.service';
 import { AnalyticsDaily } from './entities/analytics-daily.entity';
 import { AnalyticsWeekly } from './entities/analytics-weekly.entity';
 import { AnalyticsMonthly } from './entities/analytics-monthly.entity';
@@ -31,7 +30,7 @@ export class AnalyticsService {
     private userRepo: Repository<User>,
     @InjectRepository(Vehicle)
     private vehicleRepo: Repository<Vehicle>,
-    @InjectRedis() private redis: Redis,
+    private readonly redisService: RedisService,
   ) {}
 
   // ==================== 用户分析 ====================
@@ -50,7 +49,7 @@ export class AnalyticsService {
     segment: string;
   }> {
     const orders = await this.orderRepo.find({
-      where: { userId, status: OrderStatus.COMPLETED },
+      where: { userId: Number(userId), status: OrderStatus.COMPLETED },
       order: { createdAt: 'DESC' },
       take: 100, // 最近100单
     });
@@ -78,7 +77,7 @@ export class AnalyticsService {
     const frequency = recentOrders.length;
 
     // M: 消费金额总和
-    const monetary = orders.reduce((sum, o) => sum + Number(o.totalAmountCents || 0), 0);
+    const monetary = orders.reduce((sum, o) => sum + Number(o.originalAmountCents || 0), 0);
 
     // RFM评分（简化版：各维度5分制）
     const rScore = recency <= 7 ? 5 : recency <= 30 ? 4 : recency <= 60 ? 3 : recency <= 90 ? 2 : 1;
@@ -121,17 +120,17 @@ export class AnalyticsService {
     churned: number;
   }> {
     const cacheKey = 'analytics:user_segments';
-    const cached = await this.redis.get(cacheKey);
+    const cached = await this.redisService.get<string>(cacheKey);
     if (cached) {
       return JSON.parse(cached);
     }
 
     // 获取所有有订单的用户
-    const usersWithOrders = await this.orderRepo
+    const users = await this.orderRepo
       .createQueryBuilder('order')
       .select('order.userId', 'userId')
       .addSelect('COUNT(*)', 'orderCount')
-      .addSelect('SUM(order.totalAmountCents)', 'totalAmount')
+      .addSelect('SUM(order.originalAmountCents)', 'totalAmount')
       .addSelect('MAX(order.createdAt)', 'lastOrderTime')
       .groupBy('order.userId')
       .getRawMany();
@@ -142,7 +141,7 @@ export class AnalyticsService {
     let dormant = 0;
     let churned = 0;
 
-    for (const user of usersWithOrders) {
+    for (const user of users) {
       const rfm = await this.calculateRFM(user.userId);
 
       switch (rfm.segment) {
@@ -167,7 +166,7 @@ export class AnalyticsService {
     const result = { highValue, active, potential, dormant, churned };
 
     // 缓存1小时
-    await this.redis.setex(cacheKey, 3600, JSON.stringify(result));
+    await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
 
     return result;
   }
@@ -185,7 +184,7 @@ export class AnalyticsService {
       .select('order.userId', 'userId')
       .addSelect('MAX(order.createdAt)', 'lastOrderTime')
       .addSelect('COUNT(*)', 'orderCount')
-      .addSelect('SUM(order.totalAmountCents)', 'totalAmount')
+      .addSelect('SUM(order.originalAmountCents)', 'totalAmount')
       .groupBy('order.userId')
       .getRawMany();
 
@@ -216,7 +215,7 @@ export class AnalyticsService {
       { range: '10000元以上', count: 0 },
     ];
 
-    for (const user of usersWithOrders) {
+    for (const user of users) {
       const days = Math.floor(
         (Date.now() - new Date(user.lastOrderTime).getTime()) / (1000 * 60 * 60 * 24),
       );
@@ -343,7 +342,7 @@ export class AnalyticsService {
       .createQueryBuilder('order')
       .select('HOUR(order.createdAt)', 'hour')
       .addSelect('COUNT(*)', 'orders')
-      .addSelect('SUM(order.totalAmountCents)', 'amount')
+      .addSelect('SUM(order.originalAmountCents)', 'amount')
       .where('order.createdAt BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
@@ -383,50 +382,50 @@ export class AnalyticsService {
     });
 
     const overall = orders.length > 0
-      ? Math.round(orders.reduce((sum, o) => sum + Number(o.totalAmountCents || 0), 0) / orders.length)
+      ? Math.round(orders.reduce((sum, o) => sum + Number(o.originalAmountCents || 0), 0) / orders.length)
       : 0;
 
     // 按门店分组
-    const storeMap = new Map<string, { name: string; total: number; count: number }>();
+    const storeMap = new Map<number, { name: string; total: number; count: number }>();
     for (const order of orders) {
-      const storeId = order.pickupStoreId;
+      const storeId = order.storeId;
       if (!storeMap.has(storeId)) {
         storeMap.set(storeId, {
-          name: order.pickupStore?.name || '未知',
+          name: order.store?.storeName || '未知',
           total: 0,
           count: 0,
         });
       }
       const store = storeMap.get(storeId)!;
-      store.total += Number(order.totalAmountCents || 0);
+      store.total += Number(order.originalAmountCents || 0);
       store.count++;
     }
 
     const byStore = Array.from(storeMap.entries()).map(([storeId, data]) => ({
-      storeId,
+      storeId: String(storeId),
       storeName: data.name,
       avgAmount: Math.round(data.total / data.count),
     }));
 
     // 按车型分组
-    const modelMap = new Map<string, { name: string; total: number; count: number }>();
+    const modelMap = new Map<number, { name: string; total: number; count: number }>();
     for (const order of orders) {
       const modelId = order.vehicle?.modelId;
       if (!modelId) continue;
       if (!modelMap.has(modelId)) {
         modelMap.set(modelId, {
-          name: order.vehicle?.model?.name || '未知',
+          name: (order.vehicle?.model as any)?.modelName || '未知',
           total: 0,
           count: 0,
         });
       }
       const model = modelMap.get(modelId)!;
-      model.total += Number(order.totalAmountCents || 0);
+      model.total += Number(order.originalAmountCents || 0);
       model.count++;
     }
 
     const byModel = Array.from(modelMap.entries()).map(([modelId, data]) => ({
-      modelId,
+      modelId: String(modelId),
       modelName: data.name,
       avgAmount: Math.round(data.total / data.count),
     }));
@@ -485,7 +484,7 @@ export class AnalyticsService {
       .leftJoin('order.vehicle', 'vehicle')
       .leftJoin('vehicle.model', 'model')
       .select('vehicle.modelId', 'modelId')
-      .addSelect('model.name', 'modelName')
+      .addSelect('model.modelName', 'modelName')
       .addSelect('COUNT(DISTINCT order.vehicleId)', 'vehicleCount')
       .addSelect('SUM(TIMESTAMPDIFF(HOUR, order.actualPickupAt, order.actualReturnAt))', 'totalHours')
       .where('order.status = :status', { status: OrderStatus.COMPLETED })
@@ -525,9 +524,9 @@ export class AnalyticsService {
       .leftJoin('order.vehicle', 'vehicle')
       .leftJoin('vehicle.model', 'model')
       .select('vehicle.modelId', 'modelId')
-      .addSelect('model.name', 'modelName')
+      .addSelect('model.modelName', 'modelName')
       .addSelect('COUNT(*)', 'orders')
-      .addSelect('SUM(order.totalAmountCents)', 'amount')
+      .addSelect('SUM(order.originalAmountCents)', 'amount')
       .where('order.createdAt BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
@@ -672,7 +671,7 @@ export class AnalyticsService {
     // 1. 超时未取（下单超过30分钟未取车）
     const overduePickup = await this.orderRepo.find({
       where: {
-        status: OrderStatus.PENDING,
+        status: OrderStatus.PENDING_PAYMENT,
         createdAt: LessThanOrEqual(new Date(now.getTime() - 30 * 60 * 1000)),
       },
     });
@@ -709,7 +708,7 @@ export class AnalyticsService {
     // 3. 大额订单（超过5000元）
     const largeOrders = await this.orderRepo.find({
       where: {
-        totalAmountCents: MoreThanOrEqual('500000'),
+        originalAmountCents: MoreThanOrEqual(500000),
         createdAt: MoreThanOrEqual(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
       },
     });
@@ -719,7 +718,7 @@ export class AnalyticsService {
         id: order.id,
         orderNo: order.orderNo,
         type: 'large_amount',
-        reason: `大额订单: ${Number(order.totalAmountCents) / 100}元`,
+        reason: `大额订单: ${Number(order.originalAmountCents) / 100}元`,
         createdAt: order.createdAt,
       });
     }
@@ -741,26 +740,26 @@ export class AnalyticsService {
         createdAt: MoreThanOrEqual(new Date(`${today} 00:00:00`)),
       },
     });
-    await this.redis.set('stats:today:orders', todayOrders);
+    await this.redisService.set('stats:today:orders', todayOrders);
 
     // 今日收入
     const todayAmount = await this.orderRepo
       .createQueryBuilder('order')
-      .select('SUM(order.totalAmountCents)', 'total')
+      .select('SUM(order.originalAmountCents)', 'total')
       .where('order.createdAt >= :today', { today: `${today} 00:00:00` })
       .getRawOne();
 
-    await this.redis.set('stats:today:amount', todayAmount?.total || '0');
+    await this.redisService.set('stats:today:amount', todayAmount?.total || '0');
 
     // 当前可用车辆
     const availableVehicles = await this.vehicleRepo.count({
-      where: { status: 'available' },
+      where: { status: 1 },
     });
-    await this.redis.set('stats:vehicles:available', availableVehicles);
+    await this.redisService.set('stats:vehicles:available', availableVehicles);
 
     // 活跃用户（今日登录）
-    const activeUsers = await this.redis.scard('active_users:today');
-    await this.redis.set('stats:users:active', activeUsers);
+    const activeUsers = await this.redisService.exists('active_users:today');
+    await this.redisService.set('stats:users:active', activeUsers);
   }
 
   /**
@@ -773,10 +772,10 @@ export class AnalyticsService {
     activeUsers: number;
   }> {
     const [orders, amount, vehicles, users] = await Promise.all([
-      this.redis.get('stats:today:orders'),
-      this.redis.get('stats:today:amount'),
-      this.redis.get('stats:vehicles:available'),
-      this.redis.get('stats:users:active'),
+      this.redisService.get('stats:today:orders'),
+      this.redisService.get('stats:today:amount'),
+      this.redisService.get('stats:vehicles:available'),
+      this.redisService.get('stats:users:active'),
     ]);
 
     return {

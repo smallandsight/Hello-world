@@ -17,7 +17,8 @@ import { Vehicle } from '../../vehicle/entities/vehicle.entity';
 import { Store } from '../../vehicle/entities/store.entity';
 import { Payment } from '../../payment/entities/payment.entity';
 import { OrderLog } from './order-log.entity';
-import { OrderStatus } from '../../../../shared/types/order.types';
+import { OrderStatus } from '../../../shared/types/order.types';
+export { OrderStatus };
 
 @Entity('orders')
 export class Order extends BaseEntity {

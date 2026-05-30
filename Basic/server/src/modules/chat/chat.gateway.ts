@@ -27,7 +27,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 // ==================== 类型定义 ====================

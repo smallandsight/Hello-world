@@ -7,12 +7,27 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
-import { PointsRecord } from '../entities/points-record.entity';
-import { User } from '../../user/entities/user.entity';
-import {
-  PointsRecordQueryDto,
-  PointsActionType,
-} from './points.dto';
+import { PointsRecord } from './entities/points-record.entity';
+import { User } from '../user/entities/user.entity';
+
+export interface PointsRecordQueryDto {
+  page?: number;
+  size?: number;
+  type?: string;
+  changeType?: string;
+  startDate?: string;
+  endDate?: string;
+  offset?: number;
+  sortFields?: Array<{ field: string; order: 'ASC' | 'DESC' }>;
+}
+
+export type PointsActionType = 'earn' | 'spend' | 'expire' | 'adjust';
+export const PointsActionType = {
+  EARN: 'earn' as const,
+  SPEND: 'spend' as const,
+  EXPIRE: 'expire' as const,
+  ADJUST: 'adjust' as const,
+};
 
 /**
  * 积分规则配置
@@ -137,7 +152,7 @@ export class PointsService {
     const earned = rule.points;
 
     // 记录积分变动并更新余额
-    await this.addPoints(userId, PointsActionType.SIGN_IN, undefined, earned);
+    await this.addPoints(userId, (PointsActionType as any).SIGN_IN, undefined, earned);
 
     const newBalance = (user.pointsBalance || 0) + earned;
 
@@ -245,7 +260,7 @@ export class PointsService {
 
     const balance = await this.addPoints(
       userId,
-      PointsActionType.ORDER_COMPLETE,
+      (PointsActionType as any).ORDER_COMPLETE,
       orderId,
       earned,
     );

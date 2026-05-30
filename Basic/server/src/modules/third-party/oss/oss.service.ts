@@ -41,6 +41,7 @@ export interface OssUploadResult {
   key: string;              // OSS对象key
   size: number;             // 字节
   mimeType: string;
+  message?: string;         // 错误信息
   width?: number;           // 宽度（图片时可用）
   height?: number;          // 高度
 }

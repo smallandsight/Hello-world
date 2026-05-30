@@ -6,7 +6,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Between, LessThan } from 'typeorm';
 import { Payment } from './entities/payment.entity';
 import { Refund } from './entities/refund.entity';
@@ -324,7 +324,7 @@ export class PaymentService {
    */
   private calculateRefundRatio(order: Order): number {
     const now = new Date();
-    const pickupTime = order.pickupAt || order.pickupAt;
+    const pickupTime = (order as any).pickupAt || (order as any).pickedUpAt;
 
     if (!pickupTime) {
       // 无取车时间，按订单创建时间宽松处理
@@ -400,9 +400,19 @@ export class PaymentService {
     return { refund, refundAmountCents: requestedAmount, ratio };
   }
 
+  /** 别名：兼容 controller 中调用的 requestRefund */
+  async requestRefund(userId: number, dto: any): Promise<any> {
+    return this.requestRefundWithPolicy(userId, dto);
+  }
+
+  /** 内部：执行实际退款逻辑 */
+  private async processRefund(refund: any): Promise<void> {
+    await this.refundRepo.save(refund);
+    logger.log(`[Refund] 退款已处理: refundNo=${refund.refundNo}`);
+  }
+
   /**
    * 掉单同步：主动查询支付宝实际交易状态
-   * 用于前端轮询或定时任务补偿
    */
   async syncPaymentStatus(paymentId: number): Promise<{
     localStatus: number;
@@ -577,15 +587,15 @@ export class PaymentService {
           refundNo: this.generateRefundNo(),
           paymentId: payment.id,
           orderId: payment.orderId,
-          userId: 0, // 系统操作
+          userId: 0,
           refundAmountCents: payment.amountCents,
           originalAmountCents: payment.amountCents,
           refundRatio: 100,
-          refundType: 'auto_expire',
+          refundType: 'order' as any,
           reason: '支付超时自动退款',
           auditStatus: 1,
           appliedAt: now,
-        });
+        } as any);
         await this.processRefund(refund);
         refunded++;
       } catch (e) {

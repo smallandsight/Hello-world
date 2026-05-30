@@ -5,12 +5,12 @@ import { PaymentService } from './payment.service';
 import { Payment } from './entities/payment.entity';
 import { Refund } from './entities/refund.entity';
 import { PreAuth } from './entities/preauth.entity';
-// 引入支付宝服务用于真实支付对接
+import { Order } from '../order/entities/order.entity';
 import { ThirdPartyModule } from '../third-party/third-party.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, Refund, PreAuth]),
+    TypeOrmModule.forFeature([Payment, Refund, PreAuth, Order]),
     ThirdPartyModule,
   ],
   controllers: [PaymentController],

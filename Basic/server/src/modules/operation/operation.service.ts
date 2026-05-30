@@ -1,8 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import { InjectRedis } from '../../common/redis/redis.module';
-import Redis from 'ioredis';
+import { RedisService } from '../../common/redis/redis.service';
 import { ExceptionLog, ExceptionType, ExceptionStatus, SOPDefinition } from './entities/exception-log.entity';
 import { VehicleTransfer, TransferStatus } from './entities/vehicle-transfer.entity';
 import { MessageTemplate, MessageType } from './entities/message-template.entity';
@@ -171,7 +170,7 @@ export class OperationService {
     private vehicleRepo: Repository<Vehicle>,
     @InjectRepository(Store)
     private storeRepo: Repository<Store>,
-    @InjectRedis() private redis: Redis,
+    private readonly redisService: RedisService,
   ) {}
 
   // ==================== 异常处理SOP ====================
@@ -305,24 +304,24 @@ export class OperationService {
     // 1. 检查超时未取
     const overduePickup = await this.orderRepo.find({
       where: {
-        status: OrderStatus.PENDING,
+        status: OrderStatus.PENDING_PAYMENT,
         createdAt: LessThanOrEqual(new Date(now.getTime() - 30 * 60 * 1000)),
       },
     });
 
     for (const order of overduePickup) {
       const existing = await this.exceptionRepo.findOne({
-        where: { orderId: order.id, type: ExceptionType.OVERDUE_PICKUP },
+        where: { orderId: (order as any).id, type: ExceptionType.OVERDUE_PICKUP },
       });
       if (!existing) {
         const exception = await this.createException({
           type: ExceptionType.OVERDUE_PICKUP,
-          orderId: order.id,
-          userId: order.userId,
-          title: `订单${order.orderNo}超时未取`,
+          orderId: (order as any).id,
+          userId: (order as any).userId,
+          title: `订单${(order as any).orderNo}超时未取`,
           description: `用户下单已超过30分钟未取车`,
           triggerConditions: { timeoutMinutes: 30 },
-          exceptionData: { orderNo: order.orderNo, createdAt: order.createdAt },
+          exceptionData: { orderNo: (order as any).orderNo, createdAt: order.createdAt },
         });
         exceptions.push(exception);
       }
@@ -339,18 +338,18 @@ export class OperationService {
 
     for (const order of overdueReturn) {
       const existing = await this.exceptionRepo.findOne({
-        where: { orderId: order.id, type: ExceptionType.OVERDUE_RETURN },
+        where: { orderId: (order as any).id, type: ExceptionType.OVERDUE_RETURN },
       });
       if (!existing) {
         const exception = await this.createException({
           type: ExceptionType.OVERDUE_RETURN,
-          orderId: order.id,
-          userId: order.userId,
-          vehicleId: order.vehicleId,
-          title: `订单${order.orderNo}长期未还`,
+          orderId: (order as any).id,
+          userId: (order as any).userId,
+          vehicleId: (order as any).vehicleId,
+          title: `订单${(order as any).orderNo}长期未还`,
           description: `超过预计还车时间24小时`,
           triggerConditions: { overdueHours: 24 },
-          exceptionData: { orderNo: order.orderNo, expectedReturnAt: order.expectedReturnAt },
+          exceptionData: { orderNo: (order as any).orderNo, expectedReturnAt: (order as any).pickupAt },
         });
         exceptions.push(exception);
       }
@@ -397,18 +396,18 @@ export class OperationService {
     const transferNo = await this.generateTransferNo();
 
     // 获取门店名称
-    const fromStore = await this.storeRepo.findOne({ where: { id: data.fromStoreId } });
-    const toStore = await this.storeRepo.findOne({ where: { id: data.toStoreId } });
+    const fromStore = await this.storeRepo.findOne({ where: { id: data.fromStoreId as any } });
+    const toStore = await this.storeRepo.findOne({ where: { id: data.toStoreId as any } });
 
     // 获取车辆信息
-    const vehicle = await this.vehicleRepo.findOne({ where: { id: data.vehicleId } });
+    const vehicle = await this.vehicleRepo.findOne({ where: { id: data.vehicleId as any } });
 
     const transfer = this.transferRepo.create({
       ...data,
       transferNo,
-      fromStoreName: fromStore?.name,
-      toStoreName: toStore?.name,
-      plateNumber: vehicle?.plateNumber,
+      fromStoreName: (fromStore as any)?.storeName || (fromStore as any)?.name,
+      toStoreName: (toStore as any)?.storeName || (toStore as any)?.name,
+      plateNumber: (vehicle as any)?.vehicleNo || (vehicle as any)?.plateNumber,
     });
 
     return this.transferRepo.save(transfer);
@@ -480,7 +479,7 @@ export class OperationService {
 
     // 更新车辆所属门店
     await this.vehicleRepo.update(transfer.vehicleId, {
-      storeId: transfer.toStoreId,
+      storeId: transfer.toStoreId as any,
     });
 
     return this.transferRepo.save(transfer);
@@ -554,7 +553,7 @@ export class OperationService {
 
     for (const vehicleId of vehicleIds) {
       try {
-        await this.vehicleRepo.update(vehicleId, { status: 'available' });
+        await this.vehicleRepo.update(vehicleId as any, { status: 'available' as any });
         success++;
       } catch (e) {
         this.logger.error(`批量上架失败: ${vehicleId}`, e);
@@ -577,7 +576,7 @@ export class OperationService {
 
     for (const vehicleId of vehicleIds) {
       try {
-        await this.vehicleRepo.update(vehicleId, { status: 'unavailable' });
+        await this.vehicleRepo.update(vehicleId as any, { status: 'unavailable' as any });
         success++;
       } catch (e) {
         this.logger.error(`批量下架失败: ${vehicleId}`, e);
@@ -733,8 +732,8 @@ export class OperationService {
     const date = new Date();
     const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
     const key = `transfer:no:${dateStr}`;
-    const seq = await this.redis.incr(key);
-    await this.redis.expire(key, 86400);
+    const seq = await this.redisService.incr(key);
+    await this.redisService.expire(key, 86400);
     return `TF${dateStr}${String(seq).padStart(6, '0')}`;
   }
 }

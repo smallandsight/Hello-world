@@ -33,7 +33,7 @@ export class PaymentController {
     @CurrentUser() payload: any,
     @Body() dto: CreatePaymentDto,
   ) {
-    return this.paymentService.createPayment(Number(payload.sub), dto);
+    return this.paymentService.createPayment(Number(payload.sub), dto as any);
   }
 
   /**

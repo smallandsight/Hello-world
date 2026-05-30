@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In } from 'typeorm';
 import { ViolationDeposit } from './entities/violation-deposit.entity';
 import { FreezeViolationDepositDto, DeductViolationDto, RefundViolationDto } from './dto/violation.dto';
@@ -53,7 +53,7 @@ export class ViolationService {
     const deposit = this.repo.create({
       orderId: dto.orderId,
       vehicleId: dto.vehicleId,
-      userId: dto.userId || 0, // 从order中获取
+      userId: (dto as any).userId || 0,
       amountCents: dto.amountCents,
       status: 'FROZEN',
       frozenTransactionId: `FREEZE_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,

@@ -16,6 +16,7 @@ import { VehicleModel } from './vehicle-model.entity';
 import { VehicleImage } from './vehicle-image.entity';
 import { VehicleMaintenance } from './vehicle-maintenance.entity';
 import { Order } from '../../order/entities/order.entity';
+export { VehicleStatus } from '../../../shared/types/vehicle.types';
 
 @Entity('vehicles')
 export class Vehicle extends BaseEntity {

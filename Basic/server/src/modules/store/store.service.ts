@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, SelectQueryBuilder } from 'typeorm';
 import { Store } from './entities/store.entity';
 import { Vehicle } from '../vehicle/entities/vehicle.entity';
@@ -216,14 +216,14 @@ export class StoreService {
    * 附近门店（LBS 排序）— 面向用户的简化接口
    */
   async getNearbyStores(lat: number, lng: number, radius?: number, limit: number = 10) {
-    const query: QueryStoreDto = {
+    const query = {
       lat,
       lng,
       radius: radius || 10000,
       isActive: 1,
       size: Math.min(limit, 50),
       page: 1,
-    };
+    } as QueryStoreDto;
 
     const result = await this.listStores(query);
     return result.list.map((s: any) => ({

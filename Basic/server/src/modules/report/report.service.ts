@@ -130,9 +130,9 @@ export class ReportService {
 
     for (const order of orders) {
       const date = new Date(order.createdAt).toISOString().split('T')[0];
-      const expected = Number(order.totalAmountCents || 0);
+      const expected = Number((order as any).totalAmountCents || order.originalAmountCents || 0);
       const actual = order.payments
-        ?.filter(p => p.status === 'success')
+        ?.filter(p => p.status === 2)
         .reduce((sum, p) => sum + Number(p.amountCents || 0), 0) || 0;
 
       if (!dateMap.has(date)) {
@@ -350,7 +350,7 @@ export class ReportService {
         id: tx.id,
         type: tx.type,
         amount,
-        description: tx.description || '',
+        description: (tx as any).description || '',
         time: tx.createdAt,
       });
     }
@@ -642,7 +642,7 @@ export class ReportService {
 
     if (data.length === 0) {
       worksheet.addRow(['暂无数据']);
-      return workbook.xlsx.writeBuffer() as Promise<Buffer>;
+      return workbook.xlsx.writeBuffer() as Promise<any>;
     }
 
     // 添加表头
@@ -678,7 +678,7 @@ export class ReportService {
       });
     });
 
-    return workbook.xlsx.writeBuffer() as Promise<Buffer>;
+    return workbook.xlsx.writeBuffer() as Promise<any>;
   }
 
   // ==================== 辅助方法 ====================

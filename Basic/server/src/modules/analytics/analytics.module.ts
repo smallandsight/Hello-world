@@ -8,12 +8,13 @@ import { AnalyticsCron } from './analytics.cron';
 import { AnalyticsDaily } from './entities/analytics-daily.entity';
 import { AnalyticsWeekly } from './entities/analytics-weekly.entity';
 import { AnalyticsMonthly } from './entities/analytics-monthly.entity';
-import { OrderModule } from '../order/order.module';
-import { UserModule } from '../user/user.module';
-import { VehicleModule } from '../vehicle/vehicle.module';
-import { PaymentModule } from '../payment/payment.module';
-import { TicketModule } from '../ticket/ticket.module';
-import { CouponModule } from '../coupon/coupon.module';
+import { Order } from '../order/entities/order.entity';
+import { User } from '../user/entities/user.entity';
+import { Vehicle } from '../vehicle/entities/vehicle.entity';
+import { Payment } from '../payment/entities/payment.entity';
+import { Ticket } from '../ticket/entities/ticket.entity';
+import { UserCoupon } from '../coupon/entities/user-coupon.entity';
+import { PointsRecord } from '../coupon/entities/points-record.entity';
 import { RedisModule } from '../../common/redis/redis.module';
 
 @Module({
@@ -22,14 +23,15 @@ import { RedisModule } from '../../common/redis/redis.module';
       AnalyticsDaily,
       AnalyticsWeekly,
       AnalyticsMonthly,
+      Order,
+      User,
+      Vehicle,
+      Payment,
+      Ticket,
+      UserCoupon,
+      PointsRecord,
     ]),
     ScheduleModule.forRoot(),
-    OrderModule,
-    UserModule,
-    VehicleModule,
-    PaymentModule,
-    TicketModule,
-    CouponModule,
     RedisModule,
   ],
   controllers: [AnalyticsController],

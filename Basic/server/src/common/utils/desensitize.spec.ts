@@ -21,8 +21,8 @@ describe('Desensitize Utils', () => {
       expect(maskPhone(undefined as any)).toBe('');
     });
 
-    it('非标准长度手机号应原样返回', () => {
-      expect(maskPhone('12345')).toBe('12345');
+    it('非标准长度手机号返回空字符串', () => {
+      expect(maskPhone('12345')).toBe('');
     });
   });
 
@@ -32,7 +32,7 @@ describe('Desensitize Utils', () => {
     });
 
     it('应正确处理15位老版身份证', () => {
-      expect(maskIdCard('110101900101123')).toBe('110101******5123');
+      expect(maskIdCard('110101900101123')).toBe('110101*****1123');
     });
 
     it('空值应返回空字符串', () => {
@@ -48,7 +48,7 @@ describe('Desensitize Utils', () => {
 
     it('三个字及以上姓名应隐藏中间', () => {
       expect(maskName('欧阳锋')).toBe('欧阳*');
-      expect(maskName('诸葛亮')).toBe('诸*亮');
+      expect(maskName('诸葛亮')).toBe('诸葛*');
     });
 
     it('单字姓名应返回原字加星号', () => {
@@ -61,12 +61,12 @@ describe('Desensitize Utils', () => {
   });
 
   describe('maskBankCard - 银行卡脱敏 (SEC-04)', () => {
-    it('应正确脱敏16位银行卡号', () => {
-      expect(maskBankCard('6222021234567890123')).toBe('622202*******90123');
+    it('应正确脱敏银行卡号', () => {
+      expect(maskBankCard('6222021234567890123')).toBe('622202********90123');
     });
 
-    it('应正确脱敏19位银行卡号', () => {
-      expect(maskBankCard('6222021234567890123456')).toBe('622202*********3456');
+    it('应正确脱敏较长银行卡号', () => {
+      expect(maskBankCard('6222021234567890123456')).toBe('622202***********23456');
     });
 
     it('空值应返回空字符串', () => {

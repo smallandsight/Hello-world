@@ -45,7 +45,7 @@ export class SecurityMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     // 1. 分配请求ID（用于日志追踪和排查问题）
     const requestId = req.headers['x-request-id'] as string || uuidv4();
-    req['requestId'] = requestId;
+    (req as any).requestId = requestId;
 
     // 2. 设置安全响应头
     this.setSecurityHeaders(res);

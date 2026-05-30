@@ -2,10 +2,16 @@
  * Redis 服务单元测试
  * 覆盖：C-RD-01 ~ C-RD-09 (9例)
  */
-import { Test, TestingModule } from '@nestjs/testing';
 import { RedisService } from './redis.service';
 
-// Mock ioredis
+const mockPipeline = {
+  zremrangebyscore: jest.fn().mockReturnThis(),
+  zcard: jest.fn().mockReturnThis(),
+  zadd: jest.fn().mockReturnThis(),
+  pexpire: jest.fn().mockReturnThis(),
+  exec: jest.fn(),
+};
+
 const mockRedis = {
   set: jest.fn(),
   get: jest.fn(),
@@ -21,32 +27,16 @@ const mockRedis = {
   hexists: jest.fn(),
   hset: jest.fn(),
   hget: jest.fn(),
-  eval: jest.fn(), // Lua脚本执行
+  eval: jest.fn(),
+  pipeline: jest.fn().mockReturnValue(mockPipeline),
 };
 
 describe('RedisService', () => {
   let service: RedisService;
 
-  beforeEach(async () => {
-    // 动态导入
-    try {
-      const { RedisService: RS } = await import('./redis.service');
-      service = new RS(mockRedis as any);
-    } catch {
-      // 如果模块结构不同，使用基础mock
-      service = {
-        get: (key: string) => mockRedis.get(key),
-        set: (key: string, value: any, ttl?: number) => mockRedis.set(key, JSON.stringify(value), 'EX', ttl || 60),
-        del: (key: string) => mockRedis.del(key),
-        acquireLock: (lockKey: string, owner: string, ttl: number) => mockRedis.eval('', 0, lockKey, owner, String(ttl)),
-        releaseLock: (lockKey: string, owner: string) => mockRedis.eval('', 0, lockKey, owner),
-        rateLimit: (key: string, windowSeconds: number, limit: number) =>
-          mockRedis.eval('', 0, key, String(windowSeconds), String(limit)),
-      } as any;
-    }
-  });
-
-  afterEach(() => {
+  beforeEach(() => {
+    service = new RedisService();
+    (service as any).getClient = async () => mockRedis;
     jest.clearAllMocks();
   });
 
@@ -69,9 +59,7 @@ describe('RedisService', () => {
 
     it('get 不存在的键应返回 null', async () => {
       mockRedis.get.mockResolvedValue(null);
-
       const result = await service.get('nonexist');
-
       expect(result).toBeNull();
     });
   });
@@ -82,7 +70,7 @@ describe('RedisService', () => {
       mockRedis.get.mockResolvedValue(JSON.stringify(testObj));
 
       await service.set('obj:key', testObj, 300);
-      const result = await service.get('obj:key');
+      const result: any = await service.get('obj:key');
 
       expect(result).toEqual(testObj);
       expect(typeof result.name).toBe('string');
@@ -93,16 +81,20 @@ describe('RedisService', () => {
 
   describe('分布式锁 acquireLock/releaseLock (C-RD-04, C-RD-05, C-RD-06)', () => {
     it('首次获取锁应成功', async () => {
-      mockRedis.eval.mockResolvedValue(1); // Lua SET NX 成功
+      mockRedis.set.mockResolvedValue('OK');
 
       const result = await service.acquireLock('lock:order:1', 'worker-A', 30);
 
       expect(result).toBe(true);
-      expect(mockRedis.eval).toHaveBeenCalled();
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'lock:order:1', 'worker-A', 'NX', 'EX', 30,
+      );
     });
 
     it('重复获取同一把锁应失败', async () => {
-      mockRedis.eval.mockResolvedValue(0); // 已被持有
+      mockRedis.set
+        .mockResolvedValueOnce('OK')
+        .mockResolvedValueOnce(null);
 
       await service.acquireLock('lock:order:1', 'worker-B', 30);
       const result = await service.acquireLock('lock:order:1', 'worker-C', 30);
@@ -129,7 +121,12 @@ describe('RedisService', () => {
 
   describe('滑动窗口限流 rateLimit (C-RD-07, C-RD-08)', () => {
     it('未超限时应允许请求', async () => {
-      mockRedis.eval.mockResolvedValue(5); // 当前计数
+      mockPipeline.exec.mockResolvedValue([
+        [null, 1],      // zremrangebyscore
+        [null, 4],      // zcard (清理后计数)
+        [null, 1],      // zadd
+        [null, 1],      // pexpire
+      ]);
 
       const result = await service.rateLimit('user:123', 60, 100);
 
@@ -138,7 +135,12 @@ describe('RedisService', () => {
     });
 
     it('超过限制时应拒绝请求', async () => {
-      mockRedis.eval.mockResolvedValue(101); // 超过限制
+      mockPipeline.exec.mockResolvedValue([
+        [null, 1],
+        [null, 100],    // zcard 返回已达到上限
+        [null, 1],
+        [null, 1],
+      ]);
 
       const result = await service.rateLimit('user:123', 60, 100);
 
@@ -149,23 +151,16 @@ describe('RedisService', () => {
   describe('incr/decr 数值操作 (C-RD-09)', () => {
     it('incr 应递增计数器', async () => {
       mockRedis.incr.mockResolvedValue(3);
-
-      // 如果service暴露了incr方法则测试
-      if ('incr' in service) {
-        const val = await (service as any).incr('counter');
-        expect(val).toBe(3);
-        expect(mockRedis.incr).toHaveBeenCalledWith('counter');
-      }
+      const val = await service.incr('counter');
+      expect(val).toBe(3);
+      expect(mockRedis.incr).toHaveBeenCalledWith('counter');
     });
 
     it('decr 应递减计数器', async () => {
       mockRedis.decr.mockResolvedValue(2);
-
-      if ('decr' in service) {
-        const val = await (service as any).decr('counter');
-        expect(val).toBe(2);
-        expect(mockRedis.decr).toHaveBeenCalledWith('counter');
-      }
+      const val = await service.decr('counter');
+      expect(val).toBe(2);
+      expect(mockRedis.decr).toHaveBeenCalledWith('counter');
     });
   });
 });

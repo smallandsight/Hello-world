@@ -2,9 +2,10 @@
  * 角色实体（roles 表）
  * RBAC 权限模型中的角色，含数据权限范围
  */
-import { Entity, Column, Index, OneToMany } from 'typeorm';
+import { Entity, Column, Index, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { BaseEntity } from '../../../common/base.entity';
 import { StaffRole } from './staff-role.entity';
+import { Permission } from './permission.entity';
 
 @Entity('roles')
 export class Role extends BaseEntity {
@@ -81,4 +82,8 @@ export class Role extends BaseEntity {
 
   @OneToMany(() => StaffRole, (sr) => sr.role)
   staffRoles?: StaffRole[];
+
+  @ManyToMany(() => Permission, (perm) => perm.roles)
+  @JoinTable({ name: 'role_permissions' })
+  permissions?: Permission[];
 }

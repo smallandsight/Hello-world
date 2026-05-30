@@ -9,7 +9,7 @@
  * 文档：https://help.aliyun.com/document_detail/55499.html
  */
 import { Injectable, Logger } from '@nestjs/common';
-import { RedisService } from '../../shared/services/redis.service';
+import { RedisService } from '../../../common/redis/redis.service';
 
 /** 短信模板Code枚举 - 需要在阿里云控制台申请并审核通过 */
 export enum SmsTemplate {
@@ -78,7 +78,7 @@ export class SmsService {
         endpoint: this.config.endpoint,
       });
 
-      this.client = new dysmsClient.default(config);
+      this.client = new dysms.default(config);
       this.logger.log(`[Sms] 短信客户端初始化成功 signName=${this.config.signName}`);
     } catch (e) {
       this.logger.error(`[Sms] 短信客户端初始化失败: ${e.message}`);
@@ -130,7 +130,7 @@ export class SmsService {
     await this.redisService.setex(cacheKey, 300, code); // 5分钟有效
 
     // 5. 记录发送次数（用于每日限额统计）
-    const countKey = `sms:daily:${phone}:${this.getTodayStr()`;
+    const countKey = `sms:daily:${phone}:${this.getTodayStr()}`;
     await this.redisService.incr(countKey);
     await this.redisService.expire(countKey, 86400);
 
@@ -213,7 +213,7 @@ export class SmsService {
 
     // 每日限额10条
     const dailyCountStr = await this.redisService.get(`sms:daily:${phone}:${this.getTodayStr()}`);
-    const dailyCount = parseInt(dailyCountStr || '0', 10);
+    const dailyCount = parseInt((dailyCountStr as string) || '0', 10);
     if (dailyCount >= 10) {
       return { allowed: false, reason: '今日短信次数已用完' };
     }

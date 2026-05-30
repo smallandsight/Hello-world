@@ -76,7 +76,7 @@ export class CacheService {
     }
 
     const key = this.buildKey(config, ...keyParts);
-    const cached = await this.redisService.get(key);
+    const cached = await this.redisService.get<string>(key);
 
     if (!cached) {
       return null;

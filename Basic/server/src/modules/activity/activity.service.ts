@@ -1,8 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, In, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
-import { InjectRedis } from '../../common/redis/redis.module';
-import Redis from 'ioredis';
+import { RedisService } from '../../common/redis/redis.service';
 import { Activity, ActivityStatus, ActivityType } from './entities/activity.entity';
 import { FlashSale } from './entities/flash-sale.entity';
 import { DiscountRule } from './entities/discount-rule.entity';
@@ -31,7 +30,7 @@ export class ActivityService {
     private orderRepo: Repository<Order>,
     @InjectRepository(User)
     private userRepo: Repository<User>,
-    @InjectRedis() private redis: Redis,
+    private readonly redisService: RedisService,
     private couponService: CouponService,
   ) {}
 
@@ -230,7 +229,7 @@ export class ActivityService {
       })
       .execute();
 
-    return result.affected > 0;
+    return (result.affected || 0) > 0;
   }
 
   // ==================== 满减规则 ====================
@@ -281,7 +280,7 @@ export class ActivityService {
     });
 
     if (applicableRules.length === 0) {
-      return null;
+      return { ruleId: '', ruleName: '', discountAmount: 0 };
     }
 
     // 选择优惠最大的规则
@@ -427,19 +426,19 @@ export class ActivityService {
       return;
     }
 
-    // 发放积分
+    // 发放积分（TODO: 注入 PointsService 后替换）
     if (invitation.rewardPoints > 0) {
-      await this.couponService.addPoints(
-        invitation.inviterId,
-        invitation.rewardPoints,
-        'invitation',
-        `邀请好友奖励`,
-      );
+      // await this.pointsService.addPoints(
+      //   Number(invitation.inviterId),
+      //   invitation.rewardPoints,
+      //   'invitation',
+      //   `邀请好友奖励`,
+      // );
     }
 
     // 发放优惠券（如果配置）
     if (invitation.rewardCouponId) {
-      await this.couponService.claimCoupon(invitation.inviterId, invitation.rewardCouponId);
+      await this.couponService.claimCoupon(Number(invitation.inviterId), Number(invitation.rewardCouponId));
     }
 
     invitation.status = InvitationStatus.REWARDED;
@@ -482,7 +481,7 @@ export class ActivityService {
   async checkUserEligibility(activity: Activity, userId: string): Promise<boolean> {
     // 检查用户是否已达到参与上限
     const userKey = `activity:${activity.id}:user:${userId}`;
-    const usedCount = await this.redis.get(userKey);
+    const usedCount = await this.redisService.get(userKey);
 
     if (usedCount && Number(usedCount) >= activity.limitPerUser) {
       return false;
@@ -491,14 +490,14 @@ export class ActivityService {
     // 检查活动适用的用户类型
     const rules = activity.rules;
     if (rules?.applicableUsers === 'new') {
-      const user = await this.userRepo.findOne({ where: { id: userId } });
-      if (!user || user.orders?.length > 0) {
+      const user = await this.userRepo.findOne({ where: { id: Number(userId) }, relations: ['orders'] });
+      if (!user || (user.orders?.length || 0) > 0) {
         return false;
       }
     }
 
     if (rules?.applicableUsers === 'member') {
-      const user = await this.userRepo.findOne({ where: { id: userId } });
+      const user = await this.userRepo.findOne({ where: { id: Number(userId) } });
       if (!user || !user.levelId) {
         return false;
       }
@@ -512,7 +511,7 @@ export class ActivityService {
    */
   async recordUserParticipation(activityId: string, userId: string): Promise<void> {
     const userKey = `activity:${activityId}:user:${userId}`;
-    await this.redis.incr(userKey);
+    await this.redisService.incr(userKey);
 
     // 更新活动参与人数
     await this.activityRepo
@@ -551,7 +550,7 @@ export class ActivityService {
     });
 
     const orderCount = orders.length;
-    const orderAmount = orders.reduce((sum, o) => sum + Number(o.totalAmountCents || 0), 0);
+    const orderAmount = orders.reduce((sum, o) => sum + Number((o.originalAmountCents || 0) || 0), 0);
     const avgOrderAmount = orderCount > 0 ? Math.round(orderAmount / orderCount) : 0;
     const conversionRate = activity.participantCount > 0
       ? Math.round((orderCount / activity.participantCount) * 10000) / 100
@@ -584,8 +583,8 @@ export class ActivityService {
   }> {
     // 检查短时间内频繁参与
     const key = `activity:${activityId}:user:${userId}:attempts`;
-    const attempts = await this.redis.incr(key);
-    await this.redis.expire(key, 3600); // 1小时过期
+    const attempts = await this.redisService.incr(key);
+    await this.redisService.expire(key, 3600); // 1小时过期
 
     if (attempts > 10) {
       return { isSuspicious: true, reason: '参与频率过高' };

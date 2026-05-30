@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual, MoreThanOrEqual, Between } from 'typeorm';
 import { Order } from './entities/order.entity';
 import { OrderLog } from './entities/order-log.entity';
@@ -17,7 +17,7 @@ import {
   canTransition,
   ORDER_STATUS_LABELS,
 } from '../../shared/types/order.types';
-import RedisService from '../../common/redis/redis.service';
+import { RedisService } from '../../common/redis/redis.service';
 
 /** 订单号前缀 */
 const ORDER_NO_PREFIX = 'GY';
@@ -158,32 +158,28 @@ export class OrderService {
       storeId: store.id,
       status: OrderStatus.PENDING_PAYMENT,
       orderedAt: new Date(),
-      // 取还车时间
       pickupAt: pickupTime,
       plannedReturnAt: returnTime,
-      // 地址信息冗余
       pickupAddress: store.address || `${store.province}${store.city}${store.district || ''}`,
       pickupLat: store.latitude,
       pickupLng: store.longitude,
-      // 费用明细
       baseFareCents: pricing.baseFareCents,
-      timeSurchargeCents: 0, // 时段附加费暂不实现
-      distanceFareCents: 0, // 里程费还车时结算
-      memberDiscountCents: 0, // 会员折扣暂不实现
+      timeSurchargeCents: 0,
+      distanceFareCents: 0,
+      memberDiscountCents: 0,
       couponDiscountCents,
       pointsDiscountCents: dto.pointsUsed || 0,
       originalAmountCents: pricing.originalAmountCents,
       payableAmountCents,
       paidAmountCents: 0,
-      // 优惠券关联
       userCouponId,
       pointsUsed: dto.pointsUsed || 0,
-    });
+    } as any);
 
     const savedOrder = await this.orderRepo.save(order);
 
     // 10. 写入操作日志
-    await this.writeLog(savedOrder.id, 'create', 'user', userId, {
+    await this.writeLog((savedOrder as any).id, 'create', 'user', userId, {
       action: '创建订单',
       vehicleId: dto.vehicleId,
       storeId: store.id,
@@ -192,7 +188,7 @@ export class OrderService {
       amountCents: payableAmountCents,
     });
 
-    return savedOrder;
+    return savedOrder as any;
   }
 
   // ==================== 订单查询 ====================
@@ -382,7 +378,7 @@ export class OrderService {
     }
 
     // 基于实际使用时间重新计算
-    const actualStart = order.pickedUpAt || order.pickupAt || order.orderedAt;
+    const actualStart = (order as any).pickedUpAt || (order as any).pickupAt || order.orderedAt;
     const actualEnd = new Date();
     const durationMs = actualEnd.getTime() - actualStart.getTime();
     const hours = Math.ceil(durationMs / (1000 * 60 * 60));
@@ -784,7 +780,7 @@ export class OrderService {
       changeContent,
       remark,
     } as any);
-    return this.logRepo.save(log);
+    return this.logRepo.save(log) as any;
   }
 
   /**
@@ -799,8 +795,8 @@ export class OrderService {
       vehicleName: order.vehicle?.model?.modelName || '未知车型',
       vehicleImage: order.vehicle?.model?.coverImageUrl || '',
       storeName: order.store?.storeName || '',
-      pickupTime: order.pickupAt?.toISOString(),
-      plannedReturnTime: order.plannedReturnAt?.toISOString(),
+      pickupTime: (order as any).pickupAt?.toISOString(),
+      plannedReturnTime: (order as any).plannedReturnAt?.toISOString(),
       payableAmountCents: order.payableAmountCents,
       paidAmountCents: order.paidAmountCents,
       createdAt: order.createdAt.toISOString(),

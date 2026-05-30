@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { InjectRepository } from '@typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, Between, LessThan, MoreThan } from 'typeorm';
 import { Vehicle } from './entities/vehicle.entity';
 import { Store } from './entities/store.entity';
@@ -156,7 +156,7 @@ export class VehicleService {
 
     const rules: PricingRuleDto[] = models.map((model) => ({
       modelId: model.id,
-      basePricePerHour: (model as any).basePricePerHour || model.dailyRateCents ? Math.round((model.dailyRateCents / 100) / 24) : 20,
+      basePricePerHour: (model as any).basePricePerHour || (model as any).dailyRateCents ? Math.round(((model as any).dailyRateCents / 100) / 24) : 20,
       weekdayFactor: (model as any).weekdayFactor || 1.0,
       weekendFactor: (model as any).weekendFactor || 1.2,
       holidayFactor: (model as any).holidayFactor || 1.5,
